@@ -16,16 +16,14 @@ import com.deus_tech.aria.AriaConnectionEvents.ConnectedEvent;
 import com.deus_tech.aria.AriaConnectionEvents.DisconnectedEvent;
 import com.deus_tech.aria.AriaConnectionEvents.DiscoveryFinishedEvent;
 import com.deus_tech.aria.AriaConnectionEvents.DiscoveryStartedEvent;
-import com.deus_tech.aria.AriaConnectionEvents.ReadyEvent;
-import com.deus_tech.ariasdk.ariaBleService.ArsInitListener;
 import com.deus_tech.ariasdk.ariaBleService.AriaBleService;
+import com.deus_tech.ariasdk.ariaBleService.ArsInitListener;
 import com.deus_tech.ariasdk.ble.BluetoothBroadcastListener;
-import com.deus_tech.ariasdk.ble.BluetoothBroadcastReceiver;
 import com.deus_tech.ariasdk.ble.BluetoothGattCallback;
 import com.deus_tech.ariasdk.ble.BluetoothScan;
 import com.deus_tech.ariasdk.ble.ConnectionGattListener;
-import com.deus_tech.ariasdk.calibrationBleService.CasInitListener;
 import com.deus_tech.ariasdk.calibrationBleService.CalibrationBleService;
+import com.deus_tech.ariasdk.calibrationBleService.CasInitListener;
 
 import org.greenrobot.eventbus.EventBus;
 
@@ -33,8 +31,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 
-public class Aria extends BroadcastReceiver implements BluetoothBroadcastListener, ConnectionGattListener, CasInitListener, ArsInitListener{
-    private String TAG="Aria";
+public class Aria extends BroadcastReceiver implements BluetoothBroadcastListener, ConnectionGattListener, CasInitListener, ArsInitListener {
+    private String TAG = "Aria";
 
     public final static String DEVICE_NAME = "Aria";
     public static String DEVICE_PROTOCOL = "7";
@@ -48,70 +46,65 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
 
 
     private static Aria instance;
-	private Context context;
+    private Context context;
     //bluetooth
     private BluetoothManager btManager;
     private BluetoothAdapter btAdapter;
-	private final BluetoothScan btScan;
-    //private BluetoothBroadcastReceiver btBroadcastReceiver;
+    private final BluetoothScan btScan;
     private BluetoothDevice device;
     //gatt
     private BluetoothGatt btGatt;
     private BluetoothGattCallback btGattCallback;
-    //listener
-//    private ArrayList<AriaConnectionListener> listeners;
+
     //status
     private int status;
     //services
     private CalibrationBleService cas;
     private AriaBleService ars;
 
-
-    public static Aria getInstance(Context _context){
-        if (Aria.instance == null){
+    public static Aria getInstance(Context _context) {
+        if (Aria.instance == null) {
             Aria.instance = new Aria(_context);
-
         }
-
         return Aria.instance;
+    }
 
-    }//getInstance
-
-
-//    public void addListener(AriaConnectionListener _listener){
-//
-//        listeners.add(_listener);
-//
-//    }//addListener
-//
-//
-//    public void removeListener(AriaConnectionListener _listener){
-//
-//        listeners.remove(_listener);
-//
-//    }//removeListener
-
-
-    public CalibrationBleService getCas(){
+    public CalibrationBleService getCas() {
         Log.d(TAG, "getCas: ");
         return cas;
+    }
 
-    }//getCas
-
-
-    public AriaBleService getArs(){
+    public AriaBleService getArs() {
         Log.d(TAG, "getArs: ");
         return ars;
+    }
 
-    }//getArs
-
-
-    public int getStatus(){
-        Log.d(TAG, "getStatus: ");
+    public int getStatus() {
+        switch (status) {
+            case Aria.STATUS_NONE:
+                Log.d(TAG, "getStatus: STATUS_NONE");
+                break;
+            case Aria.STATUS_DISCOVERING:
+                Log.d(TAG, "getStatus: STATUS_DISCOVERING");
+                break;
+            case Aria.STATUS_FOUND:
+                Log.d(TAG, "getStatus: STATUS_FOUND");
+                break;
+            case Aria.STATUS_CONNECTING:
+                Log.d(TAG, "getStatus: STATUS_CONNECTING");
+                break;
+            case Aria.STATUS_CONNECTED:
+                Log.d(TAG, "getStatus: STATUS_CONNECTED");
+                break;
+            case Aria.STATUS_READY:
+                Log.d(TAG, "getStatus: STATUS_READY");
+                break;
+            default:
+                Log.d(TAG, "getStatus: UNKNOWN");
+                break;
+        }
         return status;
-
-    }//getStatus
-
+    }
 
     public void writeStatus_Sleep() {
         Log.d(TAG, "writeStatus_Sleep: ");
@@ -119,296 +112,194 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
             cas.writeStatus_Sleep();
     }
 
-
     public void writeStatus_Exec() {
         Log.d(TAG, "writeStatus_Exec: ");
         if (cas != null)
             cas.writeStatus_Exec();
     }
 
-
-
-
-    public void startDiscovery(){
+    public void startDiscovery() {
         Log.d(TAG, "startDiscovery: ");
         device = null;
 
-        if (btAdapter != null && btAdapter.isEnabled() == false){
-
+        if (btAdapter != null && btAdapter.isEnabled() == false) {
             IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
             context.registerReceiver(this, filter);
 
             Intent enableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
             enableIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             context.startActivity(enableIntent);
+        } else {
+            //btAdapter.startDiscovery();
+            btScan.startLeScan(
+                    new BluetoothScan.DiscoveryListener() {
+                        @Override
+                        public void onDeviceFound(BluetoothDevice device) {
+                            if (device.getName() != null &&
+                                    device.getName().startsWith(Aria.DEVICE_NAME) &&
+                                    device.getName().endsWith(Aria.DEVICE_PROTOCOL)) {
+                                Aria.this.onDeviceFound(device);
+                            }
+                        }
 
-        }else{
+                        @Override
+                        public void onDeviceLost(BluetoothDevice device) {
+                        }
 
-	        //btAdapter.startDiscovery();
-	        btScan.startLeScan(
-			        new BluetoothScan.DiscoveryListener() {
-				        @Override
-				        public void onDeviceFound(BluetoothDevice device) {
-					        if (device.getName() != null &&
-							        device.getName().startsWith(Aria.DEVICE_NAME) &&
-							        device.getName().endsWith(Aria.DEVICE_PROTOCOL)) {
-						        Aria.this.onDeviceFound(device);
-					        }
-				        }
+                        @Override
+                        public void onStarted() {
+                            Aria.this.onDiscoveryStarted();
+                        }
 
-				        @Override
-				        public void onDeviceLost(BluetoothDevice device) {
-				        }
-
-				        @Override
-				        public void onStarted() {
-					        Aria.this.onDiscoveryStarted();
-				        }
-
-				        @Override
-				        public void onFinished(ArrayList<BluetoothDevice> deviceArray) {
-					        Aria.this.onDiscoveryFinished();
-				        }
-			        }
-	        );
-
+                        @Override
+                        public void onFinished(ArrayList<BluetoothDevice> deviceArray) {
+                            Aria.this.onDiscoveryFinished();
+                        }
+                    }
+            );
         }
+    }
 
-    }//startDiscovery
-
-
-    public void stopDiscovery(){
+    public void stopDiscovery() {
         Log.d(TAG, "stopDiscovery: ");
-        //btAdapter.cancelDiscovery();
-	    btScan.stopLeScan();
+        disconnect();
+        if (btAdapter != null)
+            btAdapter.cancelDiscovery();
+        btScan.stopLeScan();
+    }
 
-    }//stopDiscovery
-
-
-    public void connect(){
+    public void connect() {
         Log.d(TAG, "connect: ");
-        if(device != null){
-
+        if (device != null) {
             status = Aria.STATUS_CONNECTING;
             btGatt = device.connectGatt(context, false, btGattCallback);
-
         }
+    }
 
-    }//connect
-
-
-    public void disconnect(){
+    public void disconnect() {
         Log.d(TAG, "disconnect: ");
-        if(btGatt != null){
+        if (btGatt != null) {
             btGatt.disconnect();
         }
 
-        if(cas != null){
+        if (cas != null) {
             cas.removeInitListener(this);
         }
 
-        if(ars != null){
+        if (ars != null) {
             ars.removeInitListener(this);
         }
-
-    }//disconnect
-
+    }
 
     //private
-
-    private Aria(Context _context){
+    private Aria(Context _context) {
         Log.d(TAG, "Aria: ");
         context = _context;
 
         btManager = (BluetoothManager) context.getSystemService(Context.BLUETOOTH_SERVICE);
         btAdapter = btManager.getAdapter();
-	    btScan = new BluetoothScan(btAdapter);
-        //initBtBroadcastReceiver();
+        btScan = new BluetoothScan(btAdapter);
         initBtGattCallback();
 
-//        listeners = new ArrayList<AriaConnectionListener>();
         status = Aria.STATUS_NONE;
+    }
 
-    }//constructor
-
-
-//    private void initBtBroadcastReceiver(){
-//
-//        btBroadcastReceiver = new BluetoothBroadcastReceiver();
-//        btBroadcastReceiver.setListener(this);
-//
-//        IntentFilter filter = new IntentFilter();
-//
-//        //http://developer.android.com/reference/android/bluetooth/BluetoothDevice.html
-//        //filter.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
-//        //filter.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
-//        //filter.addAction(BluetoothDevice.ACTION_ACL_DISCONNECT_REQUESTED);
-//        filter.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
-//        //filter.addAction(BluetoothDevice.ACTION_CLASS_CHANGED);
-//        filter.addAction(BluetoothDevice.ACTION_FOUND);
-//        //filter.addAction(BluetoothDevice.ACTION_NAME_CHANGED);
-//        //filter.addAction(BluetoothDevice.ACTION_PAIRING_REQUEST);
-//        //filter.addAction(BluetoothDevice.ACTION_UUID);
-//
-//        //http://developer.android.com/reference/android/bluetooth/BluetoothAdapter.html
-//        //filter.addAction(BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED);
-//        filter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
-//        filter.addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED);
-//        //filter.addAction(BluetoothAdapter.ACTION_LOCAL_NAME_CHANGED);
-//        //filter.addAction(BluetoothAdapter.ACTION_SCAN_MODE_CHANGED);
-//        //filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
-//
-//        context.registerReceiver(btBroadcastReceiver, filter);
-//
-//    }//initBtBroadcastReceiver
-
-
-    private void initBtGattCallback(){
+    private void initBtGattCallback() {
         Log.d(TAG, "initBtGattCallback: ");
         btGattCallback = new BluetoothGattCallback();
         btGattCallback.setConnectionListener(this);
-
-    }//initBtGattCallback
-
+    }
 
     //BluetoothBroadcastListener
-
-    public void onReceive(Context context, Intent intent){
+    public void onReceive(Context context, Intent intent) {
         Log.d(TAG, "onReceive: ");
         String action = intent.getAction();
         int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
 
-        if(action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)){
-
-            if(state == BluetoothAdapter.STATE_ON){
-
+        if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
+            if (state == BluetoothAdapter.STATE_ON) {
                 context.unregisterReceiver(this);
                 btAdapter.startDiscovery();
-
             }
-
         }
-
-    }//onReceive
-
+    }
 
     //ConnectionGattListener
-
-    public void onDiscoveryStarted(){
+    public void onDiscoveryStarted() {
         Log.d(TAG, "onDiscoveryStarted: ");
         status = Aria.STATUS_DISCOVERING;
 
         EventBus.getDefault().post(new DiscoveryStartedEvent());
-//        for(int i=0 ; i<listeners.size() ; i++){
-//            listeners.get(i).onDiscoveryStarted();
-//        }
-
-    }//onDiscoveryStarted
-
+    }
 
     public void onDiscoveryFinished() {
         Log.d(TAG, "onDiscoveryFinished: ");
-        if (device == null){
+        if (device == null) {
             status = Aria.STATUS_NONE;
         } else {
             status = Aria.STATUS_FOUND;
         }
 
         EventBus.getDefault().post(new DiscoveryFinishedEvent(device != null));
-//        for (int i=0 ; i<listeners.size() ; i++) {
-//            listeners.get(i).onDiscoveryFinished(device != null);
-//        }
+    }
 
-        //connect();
-
-    }//onDiscoveryFinished
-
-
-    public void onDeviceFound(BluetoothDevice device){
+    public void onDeviceFound(BluetoothDevice device) {
         Log.d(TAG, "onDeviceFound: ");
         this.device = device;
         stopDiscovery();
+    }
 
-    }//onDeviceFound
-
-
-    public void onDeviceConnected(List<BluetoothGattService> services){
+    public void onDeviceConnected(List<BluetoothGattService> services) {
         Log.d(TAG, "onDeviceConnected: ");
         status = Aria.STATUS_CONNECTED;
 
-//        for(int i=0 ; i<listeners.size() ; i++){
-//            listeners.get(i).onConnected();
-//        }
         EventBus.getDefault().post(new ConnectedEvent());
 
-        for(int i=0 ; i<services.size() ; i++){
-
+        for (int i = 0; i < services.size(); i++) {
             BluetoothGattService service = services.get(i);
+            Log.v(TAG, "+ Service " + service.getUuid());
 
-            if(service.getUuid().equals(CalibrationBleService.CALIBRATION_SERVICE_UUID)){
-
-                if(cas != null){
+            if (service.getUuid().equals(CalibrationBleService.CALIBRATION_SERVICE_UUID)) {
+                Log.v(TAG, "+ Service Found CALIBRATION_SERVICE_UUID");
+                if (cas != null) {
                     cas.removeInitListener(this);
                 }
 
                 cas = new CalibrationBleService(context, btGatt, service);
                 cas.addInitListener(this);
                 btGattCallback.setCalibrationListener(cas);
-
-            }else if(service.getUuid().equals(AriaBleService.ARIA_SERVICE_UUID)){
-
-                if(ars != null){
+            } else if (service.getUuid().equals(AriaBleService.ARIA_SERVICE_UUID)) {
+                Log.v(TAG, "+ Service Found ARIA_SERVICE_UUID");
+                if (ars != null) {
                     ars.removeInitListener(this);
                 }
 
                 ars = new AriaBleService(context, btGatt, service);
                 ars.addInitListener(this);
                 btGattCallback.setArsListener(ars);
-
             }
-
         }
 
-        if(cas != null){
+        if (cas != null) {
             cas.init();
+        } else {
+            Log.v(TAG, "Missing services");
         }
+    }
 
-    }//onDeviceConnected
-
-
-    public void onDeviceDisconnected(){
+    public void onDeviceDisconnected() {
         Log.d(TAG, "onDeviceDisconnected: ");
         status = Aria.STATUS_NONE;
-
         EventBus.getDefault().post(new DisconnectedEvent());
-//        for(int i=0 ; i<listeners.size() ; i++){
-//            listeners.get(i).onDisconnected();
-//        }
+    }
 
-    }//onDeviceDisconnected
-
-
-    //CasInitListener
-
-    public void onCalibrationInit(){
+    public void onCalibrationInit() {
         Log.d(TAG, "onCalibrationInit: ");
         ars.init();
+    }
 
-    }//onCalibrationInit
-
-
-    //ArsInitListener
-
-    public void onArsInit(){
-        Log.d(TAG, "onArsInit: ");
+    public void onArsInit() {
+        Log.d(TAG, "onArsInit: Aria.STATUS_READY");
         status = Aria.STATUS_READY;
-
-        EventBus.getDefault().post(new ReadyEvent());
-//        for(int i=0 ; i<listeners.size() ; i++){
-//            listeners.get(i).onReady();
-//        }
-
-    }//onArsInit
-
-
-}//Aria
+    }
+}
