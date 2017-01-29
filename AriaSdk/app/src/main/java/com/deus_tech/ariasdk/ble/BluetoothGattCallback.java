@@ -9,7 +9,6 @@ import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothProfile;
 import android.util.Log;
 
-import com.deus_tech.ariasdk.ariaBleService.ArsGattListener;
 import com.deus_tech.ariasdk.nusBleService.NusBleService;
 import com.deus_tech.ariasdk.nusBleService.NusGattListener;
 
@@ -19,7 +18,6 @@ import java.util.UUID;
 public class BluetoothGattCallback extends android.bluetooth.BluetoothGattCallback {
     private static final String TAG = "BluetoothGattCallback";
     private ConnectionGattListener connectionListener;
-    private ArsGattListener arsListener;
     private NusGattListener nusListener;
 
     public void setConnectionListener(ConnectionGattListener _connectionListener) {
@@ -28,10 +26,6 @@ public class BluetoothGattCallback extends android.bluetooth.BluetoothGattCallba
 
     public void setNusListener(NusGattListener _nusListener) {
         nusListener = _nusListener;
-    }
-
-    public void setArsListener(ArsGattListener _arsListener) {
-        arsListener = _arsListener;
     }
 
     public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
@@ -99,7 +93,7 @@ public class BluetoothGattCallback extends android.bluetooth.BluetoothGattCallba
 
         if (nusListener != null) {
             if (uuid.equals(NusBleService.TX_CHAR_UUID)) {
-                Log.d(TAG, characteristic.getValue().toString());
+                //Log.d(TAG, characteristic.getValue().toString());
                 nusListener.onDataArrived(characteristic.getValue());
                 return;
             } else {

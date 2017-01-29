@@ -17,8 +17,7 @@ import com.deus_tech.aria.AriaConnectionEvents.DisconnectedEvent;
 import com.deus_tech.aria.AriaConnectionEvents.DiscoveryFinishedEvent;
 import com.deus_tech.aria.AriaConnectionEvents.DiscoveryStartedEvent;
 import com.deus_tech.aria.AriaConnectionEvents.ReadyEvent;
-import com.deus_tech.ariasdk.ariaBleService.AriaBleService;
-import com.deus_tech.ariasdk.ariaBleService.ArsInitListener;
+
 import com.deus_tech.ariasdk.ble.BluetoothBroadcastListener;
 import com.deus_tech.ariasdk.ble.BluetoothGattCallback;
 import com.deus_tech.ariasdk.ble.BluetoothScan;
@@ -33,8 +32,14 @@ import java.util.List;
 
 
 public class Aria extends BroadcastReceiver implements BluetoothBroadcastListener,
-        ConnectionGattListener, ArsInitListener, NusInitListener {
-    private String TAG = "Aria";
+        ConnectionGattListener, NusInitListener {
+    private String TAG = "AriaService";
+
+    public final static int GESTURE_ENTER = 1; //right - 4F
+    public final static int GESTURE_HOME = 2;  //enter - 28
+    public final static int GESTURE_UP = 3;    //down - 51
+    public final static int GESTURE_DOWN = 4;  //up - 52
+    public final static int GESTURE_BACK = 5;  //left - 50
 
     public final static String DEVICE_NAME = "Aria";
     public static String DEVICE_PROTOCOL = "7";
@@ -45,7 +50,9 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
     public final static int STATUS_CONNECTING = 4;
     public final static int STATUS_CONNECTED = 5;
     public final static int STATUS_READY = 6;
+    public final static int STATUS_DISCONNECTED = 7;
 
+    public final static int MAX_RECONNECT_ATTEMPTS = 5;
 
     private static Aria instance;
     private Context context;
@@ -60,9 +67,10 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
 
     //status
     private int status;
-    //services
 
-    private AriaBleService ars;
+    private int reconnect_attemps = 0;
+
+    //services
     private NusBleService nus;
 
     public static Aria getInstance(Context _context) {
@@ -70,11 +78,6 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
             Aria.instance = new Aria(_context);
         }
         return Aria.instance;
-    }
-
-    public AriaBleService getArs() {
-        Log.d(TAG, "getArs: ");
-        return ars;
     }
 
     private int oldStatus = -1;
@@ -182,12 +185,14 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
 
     public void disconnect() {
         Log.d(TAG, "disconnect: ");
+        if (status != Aria.STATUS_NONE) {
+            Log.v(TAG, "STATUS_DISCONNECTED");
+            status = Aria.STATUS_DISCONNECTED;
+        }
+        reconnect_attemps = MAX_RECONNECT_ATTEMPTS;
+
         if (btGatt != null) {
             btGatt.disconnect();
-        }
-
-        if (ars != null) {
-            ars.removeInitListener(this);
         }
 
         if (nus != null) {
@@ -274,23 +279,28 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
             }
         }
 
+        status = Aria.STATUS_READY;
         EventBus.getDefault().post(new ReadyEvent());
+        reconnect_attemps = 0;
     }
 
     public void onDeviceDisconnected() {
-        Log.d(TAG, "onDeviceDisconnected: ");
-        status = Aria.STATUS_NONE;
-        EventBus.getDefault().post(new DisconnectedEvent());
+        Log.d(TAG, "onDeviceDisconnected: " + status);
+
+        if (status != Aria.STATUS_DISCONNECTED && reconnect_attemps < MAX_RECONNECT_ATTEMPTS) {
+            Log.d(TAG, "---------- RECONNECT -------- ");
+            status =  Aria.STATUS_CONNECTING;
+            reconnect_attemps++;
+            connect();
+        } else {
+            status = Aria.STATUS_NONE;
+            EventBus.getDefault().post(new DisconnectedEvent());
+            reconnect_attemps = 0;
+        }
     }
 
     public void onCalibrationInit() {
         Log.d(TAG, "onCalibrationInit: ");
-        ars.init();
-    }
-
-    public void onArsInit() {
-        Log.d(TAG, "onArsInit: Aria.STATUS_READY");
-        status = Aria.STATUS_READY;
     }
 
     @Override

@@ -11,8 +11,8 @@ import android.util.Log;
 import com.deus_tech.aria.ArsEvents.GestureEvent;
 import com.deus_tech.aria.CasEvents.GestureStatusEvent;
 import com.deus_tech.aria.CasEvents.OnCalibrationWritten;
+import com.deus_tech.ariasdk.Aria;
 import com.deus_tech.ariasdk.R;
-import com.deus_tech.ariasdk.ariaBleService.AriaBleService;
 
 import org.greenrobot.eventbus.EventBus;
 
@@ -208,29 +208,23 @@ public class NusBleService implements NusGattListener {
 
     }
 
-    public final static int GESTURE_ENTER = 1; //right - 4F
-    public final static int GESTURE_HOME = 2;  //enter - 28
-    public final static int GESTURE_UP = 3;    //down - 51
-    public final static int GESTURE_DOWN = 4;  //up - 52
-    public final static int GESTURE_BACK = 5;  //left - 50
-
     public void onGestureChanged(int value) {
         int _value = value;
         switch (_value) {
             case 1:
-                _value = AriaBleService.GESTURE_ENTER;
+                _value = Aria.GESTURE_ENTER;
                 break;
             case 2:
-                _value = AriaBleService.GESTURE_HOME;
+                _value = Aria.GESTURE_HOME;
                 break;
             case 3:
-                _value = AriaBleService.GESTURE_UP;
+                _value = Aria.GESTURE_UP;
                 break;
             case 4:
-                _value = AriaBleService.GESTURE_DOWN;
+                _value = Aria.GESTURE_DOWN;
                 break;
             case 5:
-                _value = AriaBleService.GESTURE_BACK;
+                _value = Aria.GESTURE_BACK;
                 break;
         }
         Log.d(TAG, "onGestureChanged: " + value + " = " + _value);
