@@ -9,6 +9,7 @@ import android.content.Context;
 import android.util.Log;
 
 import com.deus_tech.aria.ArsEvents.GestureEvent;
+import com.deus_tech.aria.CasEvents.OnCalibrationWritten;
 import com.deus_tech.ariasdk.R;
 import com.deus_tech.ariasdk.ariaBleService.AriaBleService;
 
@@ -114,6 +115,8 @@ public class NusBleService implements NusGattListener {
         context = _context;
 
         initListeners = new ArrayList<NusInitListener>();
+        casListeners = new ArrayList<CasListener>();
+
         btGatt = _btGatt;
         btGattService = _btGattService;
 
@@ -231,11 +234,7 @@ public class NusBleService implements NusGattListener {
     public void onDataArrived(byte[] buf_str) {
         String str = new String(buf_str);
         Log.v(TAG, "Data RX: [" + str + "]");
-
-        if (buf_str[0] == COMMAND_START) {
-            onCommandArrived(buf_str);
-        };
-        //EventBus.getDefault().post(new CharacterEvent(_value));
+        onCommandArrived(buf_str);
     }
 
     //---------- Write commands -----------------------------------------------------
@@ -280,7 +279,7 @@ public class NusBleService implements NusGattListener {
 
     public void writeSettingsCommand(int value) {
         Log.v(TAG, "writeSettingsCommand " + value);
-        switch(value) {
+        switch (value) {
             case SET_NUMBER_GESTURE:
                 writeSingleCommand(COMMAND_SETTING_DATA, numGestures);
                 break;
@@ -380,28 +379,28 @@ public class NusBleService implements NusGattListener {
 
     public void nextCalibrationStep() {
         Log.d(TAG, "nextCalibrationStep: ");
-        if (gestureProtocol == NEW_PROTOCOL) writeGestureStatus(GESTURE_STATUS_STARTED);
-        else {
-            currentGestureIteration++;
-            Log.d(TAG, "nextCalibrationStep: Iter " + Integer.toString(currentGestureIteration));
-            if (currentGestureIteration > numRepetitions) {
-                currentGestureIndex++;
-                currentGestureIteration = 1;
-            }
+        writeGestureStatus(GESTURE_STATUS_STARTED);
+    }
 
-            if (currentGestureIndex > numGestures) {
-                for (int i = 0; i < casListeners.size(); i++) {
-                    casListeners.get(i).onCalibrationFinished();
-                }
-            } else {
-                writeGestureStatus(NusBleService.GESTURE_STATUS_STARTED);
+    public void onCalibrationModeWritten(int _value) {
+        Log.d(TAG, "onCalibrationModeWritten " + _value);
+        //This info is only used so far for the calibration therefore I move it to the calibration status only
+        calibrationStatus = _value;
+        if (_value == NusBleService.STATUS_CALIB) {
+            EventBus.getDefault().post(new OnCalibrationWritten(_value));
+            Log.d(TAG, "onCalibrationModeWritten: calibration mode scritto correttamente " + _value);
+            for (int i = 0; i < casListeners.size(); i++) {
+                casListeners.get(i).onCalibrationStarted();
             }
+        }
+
+        if (_value == NusBleService.STATUS_EXEC) {
+            Log.d(TAG, "onCalibrationModeWritten: execution mode scritto correttamente " + _value);
         }
     }
 
     public void repeatCalibrationStep() {
-        Log.d(TAG, "repeatCalibrationStep: ");
-        //writeGestureIndex(this.currentGestureIndex);
+        Log.d(TAG, "repeatCalibrationStep: EMPTY ");
     }
 
     public void stopCalibration() {
@@ -441,16 +440,36 @@ public class NusBleService implements NusGattListener {
     }
 
     public void onCommandArrived(byte[] buf_str) {
-        int cmd = buf_str[1];
-        int value = buf_str[2];
-
         // Found single value command
-        if (buf_str[3] == COMMAND_END) {
+        if (buf_str[0] == COMMAND_START && buf_str[3] == COMMAND_END) {
+            int cmd = buf_str[1];
+            int value = buf_str[2];
             switch (cmd) {
                 case COMMAND_GESTURE:
                     onGestureChanged(value);
                     return;
             }
+            return;
         }
+
+        // Value written correctly
+        if (buf_str[0] == 'A' && buf_str[1] == 'C' && buf_str[2] == 'K') {
+            int cmd = buf_str[4];
+            int value = buf_str[5] - '0';
+
+            switch (cmd) {
+                case COMMAND_CAS_WRITE:
+                    if (value == STATUS_CALIB) {
+                        onCalibrationModeWritten(value);
+                    }
+                return;
+                default:
+                    break;
+            }
+
+            return;
+        }
+
+        //EventBus.getDefault().post(new CharacterEvent(_value));
     }
 }
