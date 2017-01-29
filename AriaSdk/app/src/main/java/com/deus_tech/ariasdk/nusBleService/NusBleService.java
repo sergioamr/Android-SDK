@@ -9,6 +9,7 @@ import android.content.Context;
 import android.util.Log;
 
 import com.deus_tech.aria.ArsEvents.GestureEvent;
+import com.deus_tech.aria.CasEvents.GestureStatusEvent;
 import com.deus_tech.aria.CasEvents.OnCalibrationWritten;
 import com.deus_tech.ariasdk.R;
 import com.deus_tech.ariasdk.ariaBleService.AriaBleService;
@@ -79,6 +80,7 @@ public class NusBleService implements NusGattListener {
     public final static char COMMAND_CAS_GESTURE_STATUS = 'S';
     public final static char COMMAND_CAS_ERROR = 'E';
     public final static char COMMAND_CAS_GESTURE_QUALITY = 'Q';
+    public final static char COMMAND_CAS_GESTURE_FEEDBACK = 'F';
 
     public final static char COMMAND_CAS_WRITE = 'W';
     public final static char COMMAND_SETTING = 'T';
@@ -191,9 +193,9 @@ public class NusBleService implements NusGattListener {
 
         String str = new String(value);
         if (!status)
-            Log.d(TAG, "Fail TX! [" + str + "]");
+            Log.d(TAG, "TX! [" + str + "]");
         else
-            Log.d(TAG, "Sent TX: [" + str + "]");
+            Log.d(TAG, "TX: [" + str + "]");
     }
 
     @Override
@@ -206,34 +208,39 @@ public class NusBleService implements NusGattListener {
 
     }
 
-    public void onGestureChanged(int _value) {
-        Log.d(TAG, "onGestureChanged: ");
+    public final static int GESTURE_ENTER = 1; //right - 4F
+    public final static int GESTURE_HOME = 2;  //enter - 28
+    public final static int GESTURE_UP = 3;    //down - 51
+    public final static int GESTURE_DOWN = 4;  //up - 52
+    public final static int GESTURE_BACK = 5;  //left - 50
 
+    public void onGestureChanged(int value) {
+        int _value = value;
         switch (_value) {
-            case 0x4F:
+            case 1:
                 _value = AriaBleService.GESTURE_ENTER;
                 break;
-            case 0x50:
+            case 2:
                 _value = AriaBleService.GESTURE_HOME;
                 break;
-            case 0x52:
+            case 3:
                 _value = AriaBleService.GESTURE_UP;
                 break;
-            case 0x51:
+            case 4:
                 _value = AriaBleService.GESTURE_DOWN;
                 break;
-            case 0x28:
+            case 5:
                 _value = AriaBleService.GESTURE_BACK;
                 break;
         }
-
+        Log.d(TAG, "onGestureChanged: " + value + " = " + _value);
         EventBus.getDefault().post(new GestureEvent(_value));
     }
 
     @Override
     public void onDataArrived(byte[] buf_str) {
         String str = new String(buf_str);
-        Log.v(TAG, "Data RX: [" + str + "]");
+        Log.v(TAG, "RX: [" + str + "]");
         onCommandArrived(buf_str);
     }
 
@@ -436,6 +443,51 @@ public class NusBleService implements NusGattListener {
             for (int i = 0; i < casListeners.size(); i++) {
                 casListeners.get(i).onCalibrationStepStarted(currentGestureIndex, currentGestureIteration);
             }
+            return;
+        }
+    }
+
+    public void onGestureStatusFeedback(int _value) {
+        switch (_value) {
+            case GESTURE_STATUS_NONE:
+                Log.v(TAG, "GESTURE_STATUS_NONE");
+                break;
+            case GESTURE_STATUS_STARTED:
+                Log.v(TAG, "GESTURE_STATUS_STARTED");
+                break;
+            case GESTURE_STATUS_RECORDING:
+                Log.v(TAG, "GESTURE_STATUS_RECORDING");
+                break;
+            case GESTURE_STATUS_OK:
+                Log.v(TAG, "GESTURE_STATUS_OK");
+                break;
+            case GESTURE_STATUS_ERROR1:
+                Log.v(TAG, "GESTURE_STATUS_ERROR1");
+                break;
+            case GESTURE_STATUS_ERROR2:
+                Log.v(TAG, "GESTURE_STATUS_ERROR2");
+                break;
+            case GESTURE_STATUS_ERROR3:
+                Log.v(TAG, "GESTURE_STATUS_ERROR3");
+                break;
+            case GESTURE_STATUS_OKREPETITION:
+                Log.v(TAG, "GESTURE_STATUS_OKREPETITION");
+                break;
+            case GESTURE_STATUS_OKGESTURE:
+                Log.v(TAG, "GESTURE_STATUS_OKGESTURE");
+                break;
+            case GESTURE_STATUS_OKCALIBRATION:
+                Log.v(TAG, "GESTURE_STATUS_OKCALIBRATION");
+                break;
+            case GESTURE_STATUS_OKCAMP:
+                Log.v(TAG, "GESTURE_STATUS_OKCAMP");
+                break;
+            case GESTURE_STATUS_OKCAD:
+                Log.v(TAG, "GESTURE_STATUS_OKCAD");
+                break;
+            case GESTURE_STATUS_OKCSIM:
+                Log.v(TAG, "GESTURE_STATUS_OKCSIM");
+                break;
         }
     }
 
@@ -443,10 +495,16 @@ public class NusBleService implements NusGattListener {
         // Found single value command
         if (buf_str[0] == COMMAND_START && buf_str[3] == COMMAND_END) {
             int cmd = buf_str[1];
-            int value = buf_str[2];
+            int value = buf_str[2] - '0';
             switch (cmd) {
                 case COMMAND_GESTURE:
                     onGestureChanged(value);
+                    return;
+                case COMMAND_CAS_GESTURE_STATUS:
+                case COMMAND_CAS_GESTURE_FEEDBACK:
+                    onGestureStatusFeedback(value);
+                    onGestureStatusWritten(value);
+                    EventBus.getDefault().post(new GestureStatusEvent(value));
                     return;
             }
             return;
@@ -462,7 +520,11 @@ public class NusBleService implements NusGattListener {
                     if (value == STATUS_CALIB) {
                         onCalibrationModeWritten(value);
                     }
-                return;
+                    return;
+                case COMMAND_CAS_GESTURE_STATUS:
+                    onGestureStatusFeedback(value);
+                    onGestureStatusWritten(value);
+                    return;
                 default:
                     break;
             }

@@ -51,17 +51,6 @@ public class BluetoothGattCallback extends android.bluetooth.BluetoothGattCallba
     public void getSupportedGattServices(BluetoothGatt gatt) {
         BluetoothDevice device = gatt.getDevice();
         List<BluetoothGattService> services = gatt.getServices();
-        /*
-        BluetoothGattService service = gatt.getService(AriaBleService.ARIA_SERVICE_UUID);
-        if (service != null) {
-            Log.i(TAG, "+ Found ARIA_SERVICE_UUID");
-        }
-
-        service = gatt.getService(CalibrationBleService.CALIBRATION_SERVICE_UUID);
-        if (service != null) {
-            Log.i(TAG, "+ Found CALIBRATION_SERVICE_UUID");
-        }
-        */
 
         if (connectionListener != null)
             connectionListener.onDeviceConnected(services);
@@ -82,7 +71,6 @@ public class BluetoothGattCallback extends android.bluetooth.BluetoothGattCallba
 
         UUID uuid = characteristic.getUuid();
         if (uuid.equals(NusBleService.TX_CHAR_UUID)) {
-            Log.d(TAG, characteristic.getValue().toString());
             if (nusListener != null)
                 nusListener.onDataArrived(characteristic.getValue());
             return;
@@ -109,13 +97,13 @@ public class BluetoothGattCallback extends android.bluetooth.BluetoothGattCallba
         Integer value = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT8, 0);
         UUID uuid = characteristic.getUuid();
 
-        Log.v(TAG, "Changed [" + uuid + "]=" + value);
-
         if (nusListener != null) {
             if (uuid.equals(NusBleService.TX_CHAR_UUID)) {
                 Log.d(TAG, characteristic.getValue().toString());
                 nusListener.onDataArrived(characteristic.getValue());
                 return;
+            } else {
+                Log.v(TAG, "Changed [" + uuid + "]=" + value);
             }
         }
     }
@@ -124,7 +112,6 @@ public class BluetoothGattCallback extends android.bluetooth.BluetoothGattCallba
     }
 
     public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
-
         Log.v(TAG, "onDescriptorWrite");
         if (status == BluetoothGatt.GATT_SUCCESS) {
         }
