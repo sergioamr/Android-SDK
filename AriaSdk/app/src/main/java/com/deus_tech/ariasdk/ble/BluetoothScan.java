@@ -20,7 +20,7 @@ import java.util.List;
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 public class BluetoothScan {
 
-	private static final String TAG = "TAG";
+	private static final String TAG = "BluetoothScan";
 
 	private static final int LE_SCAN_PERIOD = 2000;
 	private static final int LE_SCAN_DEVICE_TIMEOUT = 5000;
@@ -48,12 +48,11 @@ public class BluetoothScan {
 	}
 
 	public void startLeScan(@NonNull DiscoveryListener listener) {
-		Log.d("", "in btDiscoverDevices");
+		Log.d(TAG, "in btDiscoverDevices");
 
 		mDeviceArray.clear();
 
 		if (checkDeviceForBtSupport()) {
-			//if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
 				mLEScanner = btAdapter.getBluetoothLeScanner();
 					mLESettings = new ScanSettings.Builder()
@@ -101,8 +100,8 @@ public class BluetoothScan {
 				}
 				mLeDeviceLastResponseMap.put(deviceName, System.currentTimeMillis());
 			}
-			Log.i("callbackType", String.valueOf(callbackType));
-			Log.i("result", result.toString());
+			//Log.i("callbackType", String.valueOf(callbackType));
+			//Log.i("result", result.toString());
 		}
 
 		@Override

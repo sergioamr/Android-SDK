@@ -16,14 +16,15 @@ import com.deus_tech.aria.AriaConnectionEvents.ConnectedEvent;
 import com.deus_tech.aria.AriaConnectionEvents.DisconnectedEvent;
 import com.deus_tech.aria.AriaConnectionEvents.DiscoveryFinishedEvent;
 import com.deus_tech.aria.AriaConnectionEvents.DiscoveryStartedEvent;
+import com.deus_tech.aria.AriaConnectionEvents.ReadyEvent;
 import com.deus_tech.ariasdk.ariaBleService.AriaBleService;
 import com.deus_tech.ariasdk.ariaBleService.ArsInitListener;
 import com.deus_tech.ariasdk.ble.BluetoothBroadcastListener;
 import com.deus_tech.ariasdk.ble.BluetoothGattCallback;
 import com.deus_tech.ariasdk.ble.BluetoothScan;
 import com.deus_tech.ariasdk.ble.ConnectionGattListener;
-import com.deus_tech.ariasdk.calibrationBleService.CalibrationBleService;
-import com.deus_tech.ariasdk.calibrationBleService.CasInitListener;
+import com.deus_tech.ariasdk.nusBleService.NusBleService;
+import com.deus_tech.ariasdk.nusBleService.NusInitListener;
 
 import org.greenrobot.eventbus.EventBus;
 
@@ -31,7 +32,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 
-public class Aria extends BroadcastReceiver implements BluetoothBroadcastListener, ConnectionGattListener, CasInitListener, ArsInitListener {
+public class Aria extends BroadcastReceiver implements BluetoothBroadcastListener,
+        ConnectionGattListener, ArsInitListener, NusInitListener {
     private String TAG = "Aria";
 
     public final static String DEVICE_NAME = "Aria";
@@ -59,8 +61,9 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
     //status
     private int status;
     //services
-    private CalibrationBleService cas;
+
     private AriaBleService ars;
+    private NusBleService nus;
 
     public static Aria getInstance(Context _context) {
         if (Aria.instance == null) {
@@ -69,53 +72,54 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
         return Aria.instance;
     }
 
-    public CalibrationBleService getCas() {
-        Log.d(TAG, "getCas: ");
-        return cas;
-    }
-
     public AriaBleService getArs() {
         Log.d(TAG, "getArs: ");
         return ars;
     }
 
+    private int oldStatus = -1;
+
     public int getStatus() {
-        switch (status) {
-            case Aria.STATUS_NONE:
-                Log.d(TAG, "getStatus: STATUS_NONE");
-                break;
-            case Aria.STATUS_DISCOVERING:
-                Log.d(TAG, "getStatus: STATUS_DISCOVERING");
-                break;
-            case Aria.STATUS_FOUND:
-                Log.d(TAG, "getStatus: STATUS_FOUND");
-                break;
-            case Aria.STATUS_CONNECTING:
-                Log.d(TAG, "getStatus: STATUS_CONNECTING");
-                break;
-            case Aria.STATUS_CONNECTED:
-                Log.d(TAG, "getStatus: STATUS_CONNECTED");
-                break;
-            case Aria.STATUS_READY:
-                Log.d(TAG, "getStatus: STATUS_READY");
-                break;
-            default:
-                Log.d(TAG, "getStatus: UNKNOWN");
-                break;
+
+        if (oldStatus != status) {
+            switch (status) {
+                case Aria.STATUS_NONE:
+                    Log.d(TAG, "getStatus: STATUS_NONE");
+                    break;
+                case Aria.STATUS_DISCOVERING:
+                    Log.d(TAG, "getStatus: STATUS_DISCOVERING");
+                    break;
+                case Aria.STATUS_FOUND:
+                    Log.d(TAG, "getStatus: STATUS_FOUND");
+                    break;
+                case Aria.STATUS_CONNECTING:
+                    Log.d(TAG, "getStatus: STATUS_CONNECTING");
+                    break;
+                case Aria.STATUS_CONNECTED:
+                    Log.d(TAG, "getStatus: STATUS_CONNECTED");
+                    break;
+                case Aria.STATUS_READY:
+                    Log.d(TAG, "getStatus: STATUS_READY");
+                    break;
+                default:
+                    Log.d(TAG, "getStatus: UNKNOWN");
+                    break;
+            }
+            oldStatus = status;
         }
         return status;
     }
 
     public void writeStatus_Sleep() {
         Log.d(TAG, "writeStatus_Sleep: ");
-        if (cas != null)
-            cas.writeStatus_Sleep();
+        if (nus != null)
+            nus.writeStatus_Sleep();
     }
 
     public void writeStatus_Exec() {
         Log.d(TAG, "writeStatus_Exec: ");
-        if (cas != null)
-            cas.writeStatus_Exec();
+        if (nus != null)
+            nus.writeStatus_Exec();
     }
 
     public void startDiscovery() {
@@ -182,12 +186,12 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
             btGatt.disconnect();
         }
 
-        if (cas != null) {
-            cas.removeInitListener(this);
-        }
-
         if (ars != null) {
             ars.removeInitListener(this);
+        }
+
+        if (nus != null) {
+            nus.removeInitListener(this);
         }
     }
 
@@ -252,39 +256,25 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
     public void onDeviceConnected(List<BluetoothGattService> services) {
         Log.d(TAG, "onDeviceConnected: ");
         status = Aria.STATUS_CONNECTED;
-
         EventBus.getDefault().post(new ConnectedEvent());
 
         for (int i = 0; i < services.size(); i++) {
             BluetoothGattService service = services.get(i);
             Log.v(TAG, "+ Service " + service.getUuid());
 
-            if (service.getUuid().equals(CalibrationBleService.CALIBRATION_SERVICE_UUID)) {
-                Log.v(TAG, "+ Service Found CALIBRATION_SERVICE_UUID");
-                if (cas != null) {
-                    cas.removeInitListener(this);
+            if (service.getUuid().equals(NusBleService.RX_SERVICE_UUID)) {
+                Log.v(TAG, "+ Service Found RX_SERVICE_UUID");
+                if (nus != null) {
+                    nus.removeInitListener(this);
                 }
 
-                cas = new CalibrationBleService(context, btGatt, service);
-                cas.addInitListener(this);
-                btGattCallback.setCalibrationListener(cas);
-            } else if (service.getUuid().equals(AriaBleService.ARIA_SERVICE_UUID)) {
-                Log.v(TAG, "+ Service Found ARIA_SERVICE_UUID");
-                if (ars != null) {
-                    ars.removeInitListener(this);
-                }
-
-                ars = new AriaBleService(context, btGatt, service);
-                ars.addInitListener(this);
-                btGattCallback.setArsListener(ars);
+                nus = new NusBleService(context, btGatt, service);
+                nus.addInitListener(this);
+                btGattCallback.setNusListener(nus);
             }
         }
 
-        if (cas != null) {
-            cas.init();
-        } else {
-            Log.v(TAG, "Missing services");
-        }
+        EventBus.getDefault().post(new ReadyEvent());
     }
 
     public void onDeviceDisconnected() {
@@ -301,5 +291,15 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
     public void onArsInit() {
         Log.d(TAG, "onArsInit: Aria.STATUS_READY");
         status = Aria.STATUS_READY;
+    }
+
+    @Override
+    public void onNusInit() {
+        Log.d(TAG, "onNusInit: ");
+        nus.init();
+    }
+
+    public NusBleService getNus() {
+        return nus;
     }
 }

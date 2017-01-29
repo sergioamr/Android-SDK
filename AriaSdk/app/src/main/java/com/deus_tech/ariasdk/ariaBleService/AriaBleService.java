@@ -27,86 +27,63 @@ public class AriaBleService implements ArsGattListener{
     public final static UUID ARIA_BATTERY_UUID = UUID.fromString("e95d0002-b0de-1051-43b0-c7ab0ceffe1a");
 
     //gestures
-    public final static int  GESTURE_ENTER= 1; //right - 4F
-    public final static int  GESTURE_HOME= 2; //enter - 28
-    public final static int  GESTURE_UP= 3; //down - 51
-    public final static int  GESTURE_DOWN= 4; //up - 52
-    public final static int  GESTURE_BACK= 5; //left - 50
+    public final static int GESTURE_ENTER= 1; //right - 4F
+    public final static int GESTURE_HOME= 2; //enter - 28
+    public final static int GESTURE_UP= 3; //down - 51
+    public final static int GESTURE_DOWN= 4; //up - 52
+    public final static int GESTURE_BACK= 5; //left - 50
 
     private Context context;
-    //bluetooth
+
+    //bluetooth-
     private BluetoothGatt btGatt;
     private BluetoothGattService btGattService;
+
     //characteristics
     private BluetoothGattCharacteristic ariaGestureChar;
     private BluetoothGattCharacteristic ariaBatteryChar;
+
     //listeners
     private ArrayList<ArsInitListener> initListeners;
-//    private ArrayList<ArsListener> arsListeners;
-
 
     public AriaBleService(Context _context, BluetoothGatt _btGatt, BluetoothGattService _btGattService){
         Log.d(TAG, "AriaBleService: ");
         context = _context;
 
         initListeners = new ArrayList<ArsInitListener>();
-//        arsListeners = new ArrayList<ArsListener>();
-
         btGatt = _btGatt;
         btGattService = _btGattService;
-
-    }//ArsService
-
+    }
 
     public void addInitListener(ArsInitListener _listener){
         Log.d(TAG, "addInitListener: ");
         initListeners.add(_listener);
-
-    }//addInitListener
-
+    }
 
     public void removeInitListener(ArsInitListener _listener){
         Log.d(TAG, "removeInitListener: ");
         initListeners.remove(_listener);
-
-    }//removeInitListener
-
-
-//    public void addListener(ArsListener _listener){
-//
-//        arsListeners.add(_listener);
-//
-//    }//addArsListener
-
-
-//    public void removeListener(ArsListener _listener){
-//
-//        arsListeners.remove(_listener);
-//
-//    }//removeArsListener
-
+    }
 
     public void init(){
         Log.d(TAG, "init: ");
+
         ariaGestureChar = btGattService.getCharacteristic(AriaBleService.ARIA_GESTURE_UUID);
         ariaBatteryChar = btGattService.getCharacteristic(AriaBleService.ARIA_BATTERY_UUID);
 
         if(ariaGestureChar != null){
             enableGestureNotify(true);
+        } else {
+            Log.d(TAG, "Missing gesture ");
         }
-
-    }//init
-
+    }
 
     public void readBattery(){
         Log.d(TAG, "readBattery: ");
         btGatt.readCharacteristic(ariaBatteryChar);
-
-    }//readBattery
-
+    }
 
     //private
-
     private void enableGestureNotify(boolean _isEnabled){
         Log.d(TAG, "enableGestureNotify: ");
         btGatt.setCharacteristicNotification(ariaGestureChar, true);
@@ -120,12 +97,13 @@ public class AriaBleService implements ArsGattListener{
         }
 
         btGatt.writeDescriptor(cccd);
-
-    }//enableGestureNotify
-
+    }
 
     private void enableBatteryNotify(boolean _isEnabled){
         Log.d(TAG, "enableBatteryNotify: ");
+        /*
+        // This doesn't exist anymore and breaks our configuration
+
         btGatt.setCharacteristicNotification(ariaBatteryChar, true);
 
         BluetoothGattDescriptor cccd = ariaBatteryChar.getDescriptor(AriaBleService.CCCD_UUID);
@@ -135,88 +113,52 @@ public class AriaBleService implements ArsGattListener{
         }else{
             cccd.setValue(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE);
         }
-
         btGatt.writeDescriptor(cccd);
-
-    }//enableBatteryNotify
-
+        */
+    }
 
     //ArsGattListener - gesture
-
     public void onGestureNotifyEnabled(){
         Log.d(TAG, "onGestureNotifyEnabled: è attivo");
         if(ariaBatteryChar != null){
             enableBatteryNotify(true);
         }
-
-    }//onGestureNotifyEnabled
-
+    }
 
     public void onGestureNotifyDisabled(){
         Log.d(TAG, "onGestureNotifyDisabled: ");
-    }//onGestureNotifyDisabled
-
+    }
 
     public void onGestureChanged(int _value){
         Log.d(TAG, "onGestureChanged: ");
-     //   if (Integer.parseInt(Aria.DEVICE_PROTOCOL)==2){
-            if (_value == 0x4F) _value = AriaBleService.GESTURE_ENTER;
-            else if (_value == 0x50) _value = AriaBleService.GESTURE_HOME;
-            else if (_value == 0x52) _value = AriaBleService.GESTURE_UP;
-            else if (_value == 0x51) _value = AriaBleService.GESTURE_DOWN;
-            else if (_value == 0x28) _value = AriaBleService.GESTURE_BACK;
-//        }else{
-//            if (_value == 40) _value = AriaBleService.GESTURE_ENTER;
-//            else if (_value == 82) _value = AriaBleService.GESTURE_HOME;
-//            else if (_value == 81) _value = AriaBleService.GESTURE_UP;
-//            else if (_value == 79) _value = AriaBleService.GESTURE_DOWN;
-//            else if (_value == 80) _value = AriaBleService.GESTURE_BACK;
-//          Log.d(TAG, "onGestureChanged: Gesto numero " + _value);      }
-
+        if (_value == 0x4F) _value = AriaBleService.GESTURE_ENTER;
+        else if (_value == 0x50) _value = AriaBleService.GESTURE_HOME;
+        else if (_value == 0x52) _value = AriaBleService.GESTURE_UP;
+        else if (_value == 0x51) _value = AriaBleService.GESTURE_DOWN;
+        else if (_value == 0x28) _value = AriaBleService.GESTURE_BACK;
         EventBus.getDefault().post(new GestureEvent(_value));
-//        for(int i=0 ; i<arsListeners.size() ; i++){
-//            arsListeners.get(i).onGesturePerformed(_value);
-//
-//
-//        }
-
-    }//onGestureChanged
-
+    }
 
     //ArsGattListener - battery
-
     public void onBatteryRead(int _value){
         Log.d(TAG, "onBatteryRead: ");
         EventBus.getDefault().post(new BatteryEvent(_value));
-//        for(int i=0 ; i<arsListeners.size() ; i++){
-//            arsListeners.get(i).onBatteryValueUpdated(_value);
-//        }
-
-    }//onBatteryRead
-
+    }
 
     public void onBatteryNotifyEnabled(){
         Log.d(TAG, "onBatteryNotifyEnabled: ");
         for(int i=0 ; i<initListeners.size() ; i++){
             initListeners.get(i).onArsInit();
         }
-
-    }//onBatteryNotifyEnabled
-
+    }
 
     public void onBatteryNotifyDisabled(){
         Log.d(TAG, "onBatteryNotifyDisabled: ");
-    }//onBatteryNotifyDisabled
-
+    }
 
     public void onBatteryChanged(int _value){
         Log.d(TAG, "onBatteryChanged: ");
         EventBus.getDefault().post(new BatteryEvent(_value));
-//        for(int i=0 ; i<arsListeners.size() ; i++){
-//            arsListeners.get(i).onBatteryValueUpdated(_value);
-//        }
+    }
+}
 
-    }//onBatteryChanged
-
-
-}//AriaBleService

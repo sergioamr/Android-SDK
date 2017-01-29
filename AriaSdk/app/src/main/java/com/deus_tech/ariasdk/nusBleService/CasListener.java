@@ -1,4 +1,4 @@
-package com.deus_tech.ariasdk.calibrationBleService;
+package com.deus_tech.ariasdk.nusBleService;
 
 
 public interface CasListener{
