@@ -9,12 +9,15 @@ import android.content.Context;
 import android.util.Log;
 
 import com.deus_tech.aria.ArsEvents.GestureEvent;
+import com.deus_tech.ariasdk.R;
 import com.deus_tech.ariasdk.ariaBleService.AriaBleService;
 
 import org.greenrobot.eventbus.EventBus;
 
 import java.util.ArrayList;
 import java.util.UUID;
+
+import static android.os.Debug.isDebuggerConnected;
 
 public class NusBleService implements NusGattListener {
     private final String TAG = "NusBleService";
@@ -68,8 +71,8 @@ public class NusBleService implements NusGattListener {
     public final static int OLD_PROTOCOL = 0;
     public final static int NEW_PROTOCOL = 1;
 
-    public final static char COMMAND_START = '[';
-    public final static char COMMAND_END = ']';
+    public final static char COMMAND_START = '{';
+    public final static char COMMAND_END = '}';
 
     public final static char COMMAND_GESTURE = 'G';
     public final static char COMMAND_CAS_GESTURE_STATUS = 'S';
@@ -80,6 +83,7 @@ public class NusBleService implements NusGattListener {
     public final static char COMMAND_SETTING = 'T';
     public final static char COMMAND_SETTING_DATA = 'D';
     public final static char COMMAND_PING = 'P';
+    public final static char COMMAND_DEBUG = 'd';
 
     private Context context;
 
@@ -112,6 +116,10 @@ public class NusBleService implements NusGattListener {
         initListeners = new ArrayList<NusInitListener>();
         btGatt = _btGatt;
         btGattService = _btGattService;
+
+        numGestures = context.getResources().getInteger(R.integer.calibration_gestures);
+        numRepetitions = context.getResources().getInteger(R.integer.calibration_iterations);
+
         enableTXNotification();
     }
 
@@ -121,17 +129,17 @@ public class NusBleService implements NusGattListener {
     }
 
     public void removeCasListener(CasListener _listener) {
-        Log.d(TAG, "removeCasListener: ");
+        //Log.d(TAG, "removeCasListener: ");
         casListeners.remove(_listener);
     }
 
     public void addInitListener(NusInitListener _listener) {
-        Log.d(TAG, "addInitListener: ");
+        //Log.d(TAG, "addInitListener: ");
         initListeners.add(_listener);
     }
 
     public void removeInitListener(NusInitListener _listener) {
-        Log.d(TAG, "removeInitListener: ");
+        //Log.d(TAG, "removeInitListener: ");
         initListeners.remove(_listener);
     }
 
@@ -165,7 +173,6 @@ public class NusBleService implements NusGattListener {
     }
 
     public void writeRXCharacteristic(byte[] value) {
-        Log.v(TAG, "mBluetoothGatt null" + btGatt);
         if (btGattService == null) {
             Log.v(TAG, "Rx service not found!");
             return;
@@ -179,7 +186,11 @@ public class NusBleService implements NusGattListener {
         RxChar.setValue(value);
         boolean status = btGatt.writeCharacteristic(RxChar);
 
-        Log.d(TAG, "write TXchar - status=" + status);
+        String str = new String(value);
+        if (!status)
+            Log.d(TAG, "Fail TX! [" + str + "]");
+        else
+            Log.d(TAG, "Sent TX: [" + str + "]");
     }
 
     @Override
@@ -216,20 +227,6 @@ public class NusBleService implements NusGattListener {
         EventBus.getDefault().post(new GestureEvent(_value));
     }
 
-    public void onCommandArrived(byte[] buf_str) {
-        int cmd = buf_str[1];
-        int value = buf_str[2];
-
-        // Found single value command
-        if (buf_str[3] == COMMAND_END) {
-            switch (cmd) {
-                case COMMAND_GESTURE:
-                    onGestureChanged(value);
-                    return;
-            }
-        }
-    }
-
     @Override
     public void onDataArrived(byte[] buf_str) {
         String str = new String(buf_str);
@@ -237,18 +234,20 @@ public class NusBleService implements NusGattListener {
 
         if (buf_str[0] == COMMAND_START) {
             onCommandArrived(buf_str);
-        }
-        ;
-
+        };
         //EventBus.getDefault().post(new CharacterEvent(_value));
     }
 
     //---------- Write commands -----------------------------------------------------
-    public byte buf[] = new byte[5];
+    public byte buf[] = new byte[4];
 
     public void writeSingleCommand(char command, int value) {
         buf[0] = COMMAND_START;
         buf[1] = (byte) command;
+
+        if (value < '0')
+            value += '0';
+
         buf[2] = (byte) value;
         buf[3] = COMMAND_END;
         writeRXCharacteristic(buf);
@@ -281,6 +280,14 @@ public class NusBleService implements NusGattListener {
 
     public void writeSettingsCommand(int value) {
         Log.v(TAG, "writeSettingsCommand " + value);
+        switch(value) {
+            case SET_NUMBER_GESTURE:
+                writeSingleCommand(COMMAND_SETTING_DATA, numGestures);
+                break;
+            case SET_NUMBER_REPETITION:
+                writeSingleCommand(COMMAND_SETTING_DATA, numRepetitions);
+                break;
+        }
         writeSingleCommand(COMMAND_SETTING, value);
     }
 
@@ -364,6 +371,11 @@ public class NusBleService implements NusGattListener {
         currentGestureIndex = 1;
         currentGestureIteration = 1;
         writeStatus_Calib();
+
+        if (isDebuggerConnected()) {
+            Log.d(TAG, "------- DEBUG ACTIVE --------");
+            writeSingleCommand(COMMAND_DEBUG, 1);
+        }
     }
 
     public void nextCalibrationStep() {
@@ -424,6 +436,20 @@ public class NusBleService implements NusGattListener {
             gestureStatus = NusBleService.GESTURE_STATUS_STARTED;
             for (int i = 0; i < casListeners.size(); i++) {
                 casListeners.get(i).onCalibrationStepStarted(currentGestureIndex, currentGestureIteration);
+            }
+        }
+    }
+
+    public void onCommandArrived(byte[] buf_str) {
+        int cmd = buf_str[1];
+        int value = buf_str[2];
+
+        // Found single value command
+        if (buf_str[3] == COMMAND_END) {
+            switch (cmd) {
+                case COMMAND_GESTURE:
+                    onGestureChanged(value);
+                    return;
             }
         }
     }
