@@ -17,6 +17,7 @@ import com.deus_tech.ariasdk.R;
 import org.greenrobot.eventbus.EventBus;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.UUID;
 
 import static android.os.Debug.isDebuggerConnected;
@@ -81,12 +82,18 @@ public class NusBleService implements NusGattListener {
     public final static char COMMAND_CAS_ERROR = 'E';
     public final static char COMMAND_CAS_GESTURE_QUALITY = 'Q';
     public final static char COMMAND_CAS_GESTURE_FEEDBACK = 'F';
+    public final static char COMMAND_CAS_IS_CALIBRATED = 'C';
+    public final static char COMMAND_OK = 'O';
 
     public final static char COMMAND_CAS_WRITE = 'W';
     public final static char COMMAND_SETTING = 'T';
     public final static char COMMAND_SETTING_DATA = 'D';
     public final static char COMMAND_PING = 'P';
     public final static char COMMAND_DEBUG = 'd';
+    public final static char COMMAND_VERSION = 'V';
+
+    public final static int VERSION_COMPILATION = 0;
+    public final static int VERSION_REVISION = 1;
 
     private Context context;
 
@@ -112,12 +119,15 @@ public class NusBleService implements NusGattListener {
     private int settingsCommand;
     private int settingsData;
 
+    private LinkedList<byte[]> messages;
+
     public NusBleService(Context _context, BluetoothGatt _btGatt, BluetoothGattService _btGattService) {
         Log.d(TAG, "NusBleService: ");
         context = _context;
 
         initListeners = new ArrayList<NusInitListener>();
         casListeners = new ArrayList<CasListener>();
+        messages = new LinkedList<byte[]>();
 
         btGatt = _btGatt;
         btGattService = _btGattService;
@@ -141,6 +151,7 @@ public class NusBleService implements NusGattListener {
     public void addInitListener(NusInitListener _listener) {
         //Log.d(TAG, "addInitListener: ");
         initListeners.add(_listener);
+        messages.clear();
     }
 
     public void removeInitListener(NusInitListener _listener) {
@@ -177,10 +188,30 @@ public class NusBleService implements NusGattListener {
         Log.v(TAG, "setCharacteristicNotification TxChar");
     }
 
+    public void dumpPendingMessages() {
+        Log.d(TAG, "\n\n ------------------------ " + messages.size());
+        for (int t = 0; t < messages.size(); t++) {
+            byte[] b = messages.get(t);
+            Log.d(TAG, t + " [" + new String(b) + "]");
+        }
+    }
+
     public void writeRXCharacteristic(byte[] value) {
         if (btGattService == null) {
             Log.v(TAG, "Rx service not found!");
             return;
+        }
+
+        String str;
+
+        if (messages.size() > 0) {
+            if (value != null) {
+                str = new String(value);
+                Log.d(TAG, "TX! [" + str + "]");
+                messages.addLast(value);
+            }
+
+            value = messages.removeFirst();
         }
 
         BluetoothGattCharacteristic RxChar = btGattService.getCharacteristic(RX_CHAR_UUID);
@@ -191,21 +222,47 @@ public class NusBleService implements NusGattListener {
         RxChar.setValue(value);
         boolean status = btGatt.writeCharacteristic(RxChar);
 
-        String str = new String(value);
-        if (!status)
-            Log.d(TAG, "TX! [" + str + "]");
-        else
+        str = new String(value);
+        if (status) {
             Log.d(TAG, "TX: [" + str + "]");
+            return;
+        }
+
+        messages.addFirst(value);
+
+        Log.d(TAG, "TX! [" + str + "] Pending = " + messages.size());
+    }
+
+    @Override
+    public void onWriteRXCharacteristic() {
+        if (messages.size() > 0) {
+            writeRXCharacteristic(null);
+        }
+    }
+
+
+    public void onDeviceRespondedToConnection() {
+        for (int i = 0; i < initListeners.size(); i++) {
+            initListeners.get(i).onNusInit();
+        }
+
+        Log.v(TAG, "-------------- IS CALIBRATED -------------------");
+        writeSingleCommand(COMMAND_CAS_IS_CALIBRATED, 0);
+
+        Log.v(TAG, "------------- REQUEST VERSION ------------------");
+        writeSingleCommand(COMMAND_VERSION, VERSION_COMPILATION);
+        writeSingleCommand(COMMAND_VERSION, VERSION_REVISION);
     }
 
     @Override
     public void onNusNotifyEnabled() {
-        writeSingleCommand(COMMAND_PING, 1);
+        Log.v(TAG, "------------- onNusNotifyEnabled ------------------");
+        //onDeviceRespondedToConnection();
     }
 
     @Override
     public void onNusNotifyDisabled() {
-
+        Log.d(TAG, "onNusNotifyDisabled");
     }
 
     public void onGestureChanged(int value) {
@@ -239,9 +296,9 @@ public class NusBleService implements NusGattListener {
     }
 
     //---------- Write commands -----------------------------------------------------
-    public byte buf[] = new byte[4];
 
     public void writeSingleCommand(char command, int value) {
+        byte buf[] = new byte[4];
         buf[0] = COMMAND_START;
         buf[1] = (byte) command;
 
@@ -314,20 +371,6 @@ public class NusBleService implements NusGattListener {
     public void writeStatus_Pre_Sim() {
         Log.v(TAG, "writeStatus_Pre_Sim");
         writeSingleCommand(COMMAND_CAS_WRITE, STATUS_PRECALIB_SIM);
-    }
-
-    public void readCalibrationAttribute() {
-        Log.v(TAG, "readCalibrationAttribute");
-    }
-
-    public void readCalibrationError() {
-        Log.d(TAG, "readCalibrationError: ");
-        //btGatt.readCharacteristic(calibrationErrorChar);
-    }
-
-    private void readCalibrationMode() {
-        Log.d(TAG, "readCalibrationMode: ");
-        //btGatt.readCharacteristic(calibrationModeChar);
     }
 
     //----------------------------------------------------------------------------
@@ -489,7 +532,13 @@ public class NusBleService implements NusGattListener {
         // Found single value command
         if (buf_str[0] == COMMAND_START && buf_str[3] == COMMAND_END) {
             int cmd = buf_str[1];
-            int value = buf_str[2] - '0';
+            int value = buf_str[2];
+
+            // If it is a number we like it in digital form.
+            if (value >= '0' && value <= '9') {
+                value -= '0';
+            }
+
             switch (cmd) {
                 case COMMAND_GESTURE:
                     onGestureChanged(value);
@@ -500,6 +549,12 @@ public class NusBleService implements NusGattListener {
                     onGestureStatusWritten(value);
                     EventBus.getDefault().post(new GestureStatusEvent(value));
                     return;
+                case COMMAND_OK:
+                    if (value == 'K') {
+                        Log.d(TAG, "OK FOUND!");
+                        onDeviceRespondedToConnection();
+                    }
+                    break;
             }
             return;
         }
@@ -510,6 +565,12 @@ public class NusBleService implements NusGattListener {
             int value = buf_str[5] - '0';
 
             switch (cmd) {
+                case COMMAND_CAS_IS_CALIBRATED:
+                    if (value == 0) {
+                        Log.v(TAG, "Aria is not calibrated!");
+                        EventBus.getDefault().post(new AriaNotCalibrated());
+                    }
+                    break;
                 case COMMAND_CAS_WRITE:
                     if (value == STATUS_CALIB) {
                         onCalibrationModeWritten(value);
@@ -527,5 +588,9 @@ public class NusBleService implements NusGattListener {
         }
 
         //EventBus.getDefault().post(new CharacterEvent(_value));
+    }
+
+    // ARIA MESSAGES
+    public class AriaNotCalibrated {
     }
 }

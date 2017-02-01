@@ -82,9 +82,14 @@ public class BluetoothGattCallback extends android.bluetooth.BluetoothGattCallba
 
         Integer value = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT8, 0);
         UUID uuid = characteristic.getUuid();
+        Log.d(TAG, "onCharacteristicWrite " + status);
+        if (uuid.equals(NusBleService.RX_CHAR_UUID) && nusListener != null) {
+            nusListener.onWriteRXCharacteristic();
+        }
     }
 
     public void onReliableWriteCompleted(BluetoothGatt gatt, int status) {
+        Log.d(TAG, "onReliableWriteCompleted " + status);
     }
 
     public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
@@ -107,7 +112,20 @@ public class BluetoothGattCallback extends android.bluetooth.BluetoothGattCallba
 
     public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
         Log.v(TAG, "onDescriptorWrite");
-        if (status == BluetoothGatt.GATT_SUCCESS) {
+
+        if (status == BluetoothGatt.GATT_SUCCESS && nusListener != null) {
+            UUID uuid = descriptor.getUuid();
+            byte[] value = descriptor.getValue();
+            if (uuid.equals(NusBleService.NUS_CCCD_UUID)) {
+                if (value.equals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)) {
+                    nusListener.onNusNotifyEnabled();
+                    return;
+                }
+                if (value.equals(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE)) {
+                    nusListener.onNusNotifyDisabled();
+                    return;
+                }
+            }
         }
     }
 

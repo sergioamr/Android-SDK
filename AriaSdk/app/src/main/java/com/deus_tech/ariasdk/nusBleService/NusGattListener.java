@@ -5,4 +5,5 @@ public interface NusGattListener{
     void onNusNotifyEnabled();
     void onNusNotifyDisabled();
     void onDataArrived(byte[] str);
+    void onWriteRXCharacteristic();
 }

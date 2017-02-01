@@ -17,7 +17,6 @@ import com.deus_tech.aria.AriaConnectionEvents.DisconnectedEvent;
 import com.deus_tech.aria.AriaConnectionEvents.DiscoveryFinishedEvent;
 import com.deus_tech.aria.AriaConnectionEvents.DiscoveryStartedEvent;
 import com.deus_tech.aria.AriaConnectionEvents.ReadyEvent;
-
 import com.deus_tech.ariasdk.ble.BluetoothBroadcastListener;
 import com.deus_tech.ariasdk.ble.BluetoothGattCallback;
 import com.deus_tech.ariasdk.ble.BluetoothScan;
@@ -128,6 +127,7 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
     public void startDiscovery() {
         Log.d(TAG, "startDiscovery: ");
         device = null;
+        status = STATUS_NONE;
 
         if (btAdapter != null && btAdapter.isEnabled() == false) {
             IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
@@ -169,7 +169,7 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
 
     public void stopDiscovery() {
         Log.d(TAG, "stopDiscovery: ");
-        disconnect();
+
         if (btAdapter != null)
             btAdapter.cancelDiscovery();
         btScan.stopLeScan();
@@ -183,13 +183,13 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
         }
     }
 
-    public void disconnect() {
+    public void disconnect( boolean force_disconnect) {
         Log.d(TAG, "disconnect: ");
-        if (status != Aria.STATUS_NONE) {
+        if (force_disconnect) {
             Log.v(TAG, "STATUS_DISCONNECTED");
             status = Aria.STATUS_DISCONNECTED;
+            reconnect_attemps = MAX_RECONNECT_ATTEMPTS;
         }
-        reconnect_attemps = MAX_RECONNECT_ATTEMPTS;
 
         if (btGatt != null) {
             btGatt.disconnect();
@@ -243,6 +243,15 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
 
     public void onDiscoveryFinished() {
         Log.d(TAG, "onDiscoveryFinished: ");
+
+        if (status == Aria.STATUS_DISCONNECTED) {
+            Log.d(TAG, "Aria wants to be disconnected! ");
+            status = Aria.STATUS_NONE;
+            device = null;
+            EventBus.getDefault().post(new DiscoveryFinishedEvent(false));
+            return;
+        }
+
         if (device == null) {
             status = Aria.STATUS_NONE;
         } else {
@@ -279,8 +288,7 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
             }
         }
 
-        status = Aria.STATUS_READY;
-        EventBus.getDefault().post(new ReadyEvent());
+
         reconnect_attemps = 0;
     }
 
@@ -306,7 +314,8 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
     @Override
     public void onNusInit() {
         Log.d(TAG, "onNusInit: ");
-        nus.init();
+        status = Aria.STATUS_READY;
+        EventBus.getDefault().post(new ReadyEvent());
     }
 
     public NusBleService getNus() {
