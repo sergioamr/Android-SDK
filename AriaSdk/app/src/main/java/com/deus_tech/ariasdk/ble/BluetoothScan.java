@@ -23,7 +23,7 @@ public class BluetoothScan {
 	private static final String TAG = "BluetoothScan";
 
 	private static final int LE_SCAN_PERIOD = 2000;
-	private static final int LE_SCAN_DEVICE_TIMEOUT = 5000;
+	private static final int LE_SCAN_DEVICE_TIMEOUT = 15000;
 
 	private ArrayList<BluetoothDevice> mDeviceArray =  new ArrayList<>();
 
@@ -100,8 +100,6 @@ public class BluetoothScan {
 				}
 				mLeDeviceLastResponseMap.put(deviceName, System.currentTimeMillis());
 			}
-			//Log.i("callbackType", String.valueOf(callbackType));
-			//Log.i("result", result.toString());
 		}
 
 		@Override
@@ -150,5 +148,4 @@ public class BluetoothScan {
 	public ArrayList<BluetoothDevice> getBluetoothDevices() {
 		return mDeviceArray;
 	}
-
 }

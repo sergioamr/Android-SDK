@@ -12,15 +12,15 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.util.Log;
 
+import com.deus_tech.ariasdk.ble.BluetoothGattCallback;
+import com.deus_tech.ariasdk.ble.BluetoothScan;
+import com.deus_tech.ariasdk.ble.ConnectionGattListener;
 import com.deus_tech.aria.AriaConnectionEvents.ConnectedEvent;
 import com.deus_tech.aria.AriaConnectionEvents.DisconnectedEvent;
 import com.deus_tech.aria.AriaConnectionEvents.DiscoveryFinishedEvent;
 import com.deus_tech.aria.AriaConnectionEvents.DiscoveryStartedEvent;
 import com.deus_tech.aria.AriaConnectionEvents.ReadyEvent;
-import com.deus_tech.ariasdk.ble.BluetoothBroadcastListener;
-import com.deus_tech.ariasdk.ble.BluetoothGattCallback;
-import com.deus_tech.ariasdk.ble.BluetoothScan;
-import com.deus_tech.ariasdk.ble.ConnectionGattListener;
+import com.deus_tech.aria.AriaConnectionEvents.ReconnectEvent;
 import com.deus_tech.ariasdk.nusBleService.NusBleService;
 import com.deus_tech.ariasdk.nusBleService.NusInitListener;
 
@@ -30,7 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 
-public class Aria extends BroadcastReceiver implements BluetoothBroadcastListener,
+public class Aria extends BroadcastReceiver implements
         ConnectionGattListener, NusInitListener {
     private String TAG = "AriaService";
 
@@ -40,8 +40,7 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
     public final static int GESTURE_DOWN = 4;  //up - 52
     public final static int GESTURE_BACK = 5;  //left - 50
 
-    public final static String DEVICE_NAME = "Aria";
-    public static String DEVICE_PROTOCOL = "7";
+    public final static String FLICKTEK_DEVICE_NAME = "FlickTek Clip";
 
     public final static int STATUS_NONE = 1;
     public final static int STATUS_DISCOVERING = 2;
@@ -60,6 +59,7 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
     private BluetoothAdapter btAdapter;
     private final BluetoothScan btScan;
     private BluetoothDevice device;
+    private String address = "";
     //gatt
     private BluetoothGatt btGatt;
     private BluetoothGattCallback btGattCallback;
@@ -77,6 +77,19 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
             Aria.instance = new Aria(_context);
         }
         return Aria.instance;
+    }
+
+    public void setDeviceAddress(String address) {
+        if (address == null) {
+            Log.v(TAG, "Empty device address");
+            return;
+        }
+
+        if (this.address != null) {
+            disconnect(false);
+        }
+
+        this.address = address;
     }
 
     private int oldStatus = -1;
@@ -137,15 +150,16 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
             enableIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             context.startActivity(enableIntent);
         } else {
-            //btAdapter.startDiscovery();
             btScan.startLeScan(
                     new BluetoothScan.DiscoveryListener() {
                         @Override
                         public void onDeviceFound(BluetoothDevice device) {
-                            if (device.getName() != null &&
-                                    device.getName().startsWith(Aria.DEVICE_NAME) &&
-                                    device.getName().endsWith(Aria.DEVICE_PROTOCOL)) {
-                                Aria.this.onDeviceFound(device);
+                            Log.v(TAG, "Found device " + device.getName() + " " + device.getAddress());
+                            if (device.getName() != null && device.getAddress().equals(address)) {
+                                Log.v(TAG, "Stop discovery and report device found");
+                                stopDiscovery();
+                                Aria.instance.device = device;
+                                connect(device);
                             }
                         }
 
@@ -155,12 +169,30 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
 
                         @Override
                         public void onStarted() {
-                            Aria.this.onDiscoveryStarted();
+                            Log.d(TAG, "onDiscoveryStarted: ");
+                            status = Aria.STATUS_DISCOVERING;
+                            EventBus.getDefault().post(new DiscoveryStartedEvent());
                         }
 
                         @Override
                         public void onFinished(ArrayList<BluetoothDevice> deviceArray) {
-                            Aria.this.onDiscoveryFinished();
+                            Log.d(TAG, "onDiscoveryFinished: ");
+
+                            if (status == Aria.STATUS_DISCONNECTED) {
+                                Log.d(TAG, "Aria wants to be disconnected! ");
+                                status = Aria.STATUS_NONE;
+                                device = null;
+                                EventBus.getDefault().post(new DiscoveryFinishedEvent(false));
+                                return;
+                            }
+
+                            if (device == null) {
+                                status = Aria.STATUS_NONE;
+                            } else {
+                                status = Aria.STATUS_FOUND;
+                            }
+
+                            EventBus.getDefault().post(new DiscoveryFinishedEvent(device != null));
                         }
                     }
             );
@@ -175,15 +207,19 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
         btScan.stopLeScan();
     }
 
-    public void connect() {
+    public void connect(BluetoothDevice device) {
+        if (this.device != device) {
+            disconnect(true);
+            this.device = device;
+        }
         Log.d(TAG, "connect: ");
-        if (device != null) {
+        if (this.device != null) {
             status = Aria.STATUS_CONNECTING;
-            btGatt = device.connectGatt(context, false, btGattCallback);
+            btGatt = this.device.connectGatt(context, false, btGattCallback);
         }
     }
 
-    public void disconnect( boolean force_disconnect) {
+    public void disconnect(boolean force_disconnect) {
         Log.d(TAG, "disconnect: ");
         if (force_disconnect) {
             Log.v(TAG, "STATUS_DISCONNECTED");
@@ -233,40 +269,6 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
         }
     }
 
-    //ConnectionGattListener
-    public void onDiscoveryStarted() {
-        Log.d(TAG, "onDiscoveryStarted: ");
-        status = Aria.STATUS_DISCOVERING;
-
-        EventBus.getDefault().post(new DiscoveryStartedEvent());
-    }
-
-    public void onDiscoveryFinished() {
-        Log.d(TAG, "onDiscoveryFinished: ");
-
-        if (status == Aria.STATUS_DISCONNECTED) {
-            Log.d(TAG, "Aria wants to be disconnected! ");
-            status = Aria.STATUS_NONE;
-            device = null;
-            EventBus.getDefault().post(new DiscoveryFinishedEvent(false));
-            return;
-        }
-
-        if (device == null) {
-            status = Aria.STATUS_NONE;
-        } else {
-            status = Aria.STATUS_FOUND;
-        }
-
-        EventBus.getDefault().post(new DiscoveryFinishedEvent(device != null));
-    }
-
-    public void onDeviceFound(BluetoothDevice device) {
-        Log.d(TAG, "onDeviceFound: ");
-        this.device = device;
-        stopDiscovery();
-    }
-
     public void onDeviceConnected(List<BluetoothGattService> services) {
         Log.d(TAG, "onDeviceConnected: ");
         status = Aria.STATUS_CONNECTED;
@@ -288,7 +290,6 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
             }
         }
 
-
         reconnect_attemps = 0;
     }
 
@@ -297,9 +298,10 @@ public class Aria extends BroadcastReceiver implements BluetoothBroadcastListene
 
         if (status != Aria.STATUS_DISCONNECTED && reconnect_attemps < MAX_RECONNECT_ATTEMPTS) {
             Log.d(TAG, "---------- RECONNECT -------- ");
-            status =  Aria.STATUS_CONNECTING;
+            EventBus.getDefault().post(new ReconnectEvent());
+            status = Aria.STATUS_CONNECTING;
             reconnect_attemps++;
-            connect();
+            connect(device);
         } else {
             status = Aria.STATUS_NONE;
             EventBus.getDefault().post(new DisconnectedEvent());
