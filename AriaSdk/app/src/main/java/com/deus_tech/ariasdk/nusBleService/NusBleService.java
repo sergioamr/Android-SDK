@@ -569,6 +569,8 @@ public class NusBleService implements NusGattListener {
                     if (value == 0) {
                         Log.v(TAG, "Aria is not calibrated!");
                         EventBus.getDefault().post(new AriaNotCalibrated());
+                    } else {
+                        writeStatus_Exec();
                     }
                     break;
                 case COMMAND_CAS_WRITE:
