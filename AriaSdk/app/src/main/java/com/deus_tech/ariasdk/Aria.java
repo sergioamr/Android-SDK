@@ -32,7 +32,7 @@ import java.util.List;
 
 public class Aria extends BroadcastReceiver implements
         ConnectionGattListener, NusInitListener {
-    private String TAG = "AriaService";
+    private String TAG = "Aria";
 
     public final static int GESTURE_ENTER = 1; //right - 4F
     public final static int GESTURE_HOME = 2;  //enter - 28
@@ -52,13 +52,11 @@ public class Aria extends BroadcastReceiver implements
 
     public final static int MAX_RECONNECT_ATTEMPTS = 5;
 
-    private static Aria instance;
     private Context context;
     //bluetooth
     private BluetoothManager btManager;
     private BluetoothAdapter btAdapter;
     private final BluetoothScan btScan;
-    private BluetoothDevice device;
     private String address = "";
     //gatt
     private BluetoothGatt btGatt;
@@ -66,18 +64,12 @@ public class Aria extends BroadcastReceiver implements
 
     //status
     private int status;
+    private BluetoothDevice device;
 
     private int reconnect_attemps = 0;
 
     //services
     private NusBleService nus;
-
-    public static Aria getInstance(Context _context) {
-        if (Aria.instance == null) {
-            Aria.instance = new Aria(_context);
-        }
-        return Aria.instance;
-    }
 
     public void setDeviceAddress(String address) {
         if (address == null) {
@@ -153,13 +145,12 @@ public class Aria extends BroadcastReceiver implements
             btScan.startLeScan(
                     new BluetoothScan.DiscoveryListener() {
                         @Override
-                        public void onDeviceFound(BluetoothDevice device) {
-                            Log.v(TAG, "Found device " + device.getName() + " " + device.getAddress());
-                            if (device.getName() != null && device.getAddress().equals(address)) {
+                        public void onDeviceFound(BluetoothDevice dev) {
+                            Log.v(TAG, "Found device " + dev.getName() + " " + dev.getAddress());
+                            if (dev.getName() != null && dev.getAddress().equals(address)) {
                                 Log.v(TAG, "Stop discovery and report device found");
                                 stopDiscovery();
-                                Aria.instance.device = device;
-                                connect(device);
+                                connect(dev);
                             }
                         }
 
@@ -208,10 +199,7 @@ public class Aria extends BroadcastReceiver implements
     }
 
     public void connect(BluetoothDevice device) {
-        if (this.device != device) {
-            disconnect(true);
-            this.device = device;
-        }
+        this.device = device;
         Log.d(TAG, "connect: ");
         if (this.device != null) {
             status = Aria.STATUS_CONNECTING;
@@ -237,7 +225,7 @@ public class Aria extends BroadcastReceiver implements
     }
 
     //private
-    private Aria(Context _context) {
+    public Aria(Context _context) {
         Log.d(TAG, "Aria: ");
         context = _context;
 
