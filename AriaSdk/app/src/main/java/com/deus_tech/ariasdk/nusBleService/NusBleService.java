@@ -240,14 +240,15 @@ public class NusBleService implements NusGattListener {
         }
     }
 
+    public void onQueryForCalibration() {
+        Log.v(TAG, "-------------- IS CALIBRATED -------------------");
+        writeSingleCommand(COMMAND_CAS_IS_CALIBRATED, 0);
+    }
 
     public void onDeviceRespondedToConnection() {
         for (int i = 0; i < initListeners.size(); i++) {
             initListeners.get(i).onNusInit();
         }
-
-        Log.v(TAG, "-------------- IS CALIBRATED -------------------");
-        writeSingleCommand(COMMAND_CAS_IS_CALIBRATED, 0);
 
         Log.v(TAG, "------------- REQUEST VERSION ------------------");
         writeSingleCommand(COMMAND_VERSION, VERSION_COMPILATION);
